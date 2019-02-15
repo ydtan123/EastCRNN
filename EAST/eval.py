@@ -125,9 +125,13 @@ class EASTPredictor(object):
         else:
             return p[[0, 3, 2, 1]]
     
-    
-    def predict_one(self, img_file):
+
+    def predict_one_file(self, img_file):
         im = cv2.imread(img_file)[:, :, ::-1]
+        return predict_one_image(im. img_file)
+
+    
+    def predict_one_image(self, im, img_file):
     
         im_resized, (ratio_h, ratio_w) = self.resize_image(im)
         im_resized = im_resized.astype(np.float32)
@@ -152,15 +156,15 @@ class EASTPredictor(object):
             boxes[:, :, 1] /= ratio_h
             logging.debug("found {} boxes".format(len(boxes)))
             fstem = pathlib.Path(img_file).stem
-            letters, im = self.save_boxes(os.path.join(self.output_path, fstem + "_boxes.txt"), im, boxes)
+            letters = self.save_boxes(os.path.join(self.output_path, fstem + "_boxes.txt"), boxes)
             cv2.imwrite(os.path.join(self.output_path, fstem + "_with_box.jpg"), im[:, :, ::-1])
         else:
             logging.debug("Did not find boxes")
     
-        return letters, im
+        return letters
     
     
-    def save_boxes(self, filename, im, boxes):
+    def save_boxes(self, filename, boxes):
         letters = []
         with open(filename, 'w+') as f:
             for box in boxes:
@@ -186,9 +190,9 @@ class EASTPredictor(object):
     
                 f.write('{},{},{},{},{},{},{},{}\r\n'
                         .format(poly[0, 0], poly[0, 1], poly[1, 0], poly[1, 1], poly[2, 0], poly[2, 1], poly[3, 0], poly[3, 1],))
-                cv2.polylines(im[:, :, ::-1], [box.astype(np.int32).reshape((-1, 1, 2))], True, color=(255, 255, 0), thickness=1)
+#                cv2.polylines(im[:, :, ::-1], [box.astype(np.int32).reshape((-1, 1, 2))], True, color=(255, 0, 0), thickness=1)
                 letters.append(('', poly[0, 0], poly[0, 1], poly[2, 0], poly[2, 1]))
-        return letters, im
+        return letters
 
 
 if __name__ == "__main__":
@@ -212,13 +216,13 @@ if __name__ == "__main__":
     predictor = EASTPredictor(args["lr"], args["weight"], args["output"])
     
     if (args["image"] != ''):
-        predictor.predict_one(args["image"])
+        predictor.predict_one_file(args["image"])
 
     count = 0
     if (args["image_list"] != ''):
         with open(args["image_list"]) as f:
             for l in f:
-                predictor.predict_one(l.strip())
+                predictor.predict_one_file(l.strip())
                 count += 1
                 if (args["number"] <= count):
                     break

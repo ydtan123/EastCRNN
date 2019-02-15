@@ -18,8 +18,8 @@ def group_by_y(letters):
         found = False
         for g in groups:
             logging.debug("l:{}, g:{}, intersect:{}".format(l, g[-1], line_intersect((g[-1][2], g[-1][4]), (l[2], l[4])))) 
-            if (line_intersect((g[-1][2], g[-1][4]), (l[2], l[4]))
-                and (math.fabs(l[1] - g[-1][3]) < (l[3] - l[1]) * 2)):
+            if (line_intersect((g[-1][2], g[-1][4]), (l[2], l[4]))):
+#                and (math.fabs(l[1] - g[-1][3]) < (l[3] - l[1]) * 2)):
                 g.append(l)
                 found = True
                 break

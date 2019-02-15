@@ -19,7 +19,7 @@ from utils.util import *
 from utils.save import *
 from utils.myzip import *
 import torch.backends.cudnn as cudnn
-from eval import predict
+from eval_old import predict
 from hmean import compute_hmean
 import zipfile
 import glob

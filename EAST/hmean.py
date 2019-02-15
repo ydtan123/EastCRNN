@@ -9,6 +9,7 @@ def compute_hmean(submit_file_path):
 
 	dirname  = os.path.dirname(submit_file_path)
 	gt_file_path  = os.path.join(dirname, 'gt.zip')
+        print("gt file path: {}".format(gt_file_path))
 	assert os.path.isfile(gt_file_path), 'There is no gt.zip'
 
 	log_file_path = os.path.join(dirname, 'log_epoch_hmean.txt')

@@ -12,18 +12,18 @@ from CRNN.tool.image_boxes import get_gt_symbols
 
 
 class Detector(object):
-    def __init__(self, east_weight, crnn_weight, output):
+    def __init__(self, east_weight, crnn_weight, output, debug=False):
         if (not os.path.exists(output)):
             os.mkdir(output)
+        self.output = output
         self.east = EASTPredictor(0.0001, east_weight, output)
-        self.crnn = CRNNPredictor(crnn_weight)
+        self.crnn = CRNNPredictor(crnn_weight, debug)
+        self.debug = debug
 
 
-    def draw_boxes(self, letters, img_file):
-        im = cv2.imread(img_file)
+    def draw_boxes(self, letters, color, im):
         for l in letters:
-            cv2.rectangle(im, (l[1], l[2]), (l[3], l[4]), (255, 0, 0), 1)
-        cv2.imwrite(img_file, im)
+            cv2.rectangle(im, (l[1], l[2]), (l[3], l[4]), color, 1)
 
 
     def recognize_only(self, img_file, gt_file):
@@ -40,19 +40,30 @@ class Detector(object):
         else:
             p = None
         return gt_group_strings, p, gt_letters
-        
+
+    
     def detect_one_file(self, img_file, gt_file=None):
-        letters, im = self.east.predict_one(img_file)
+        im = cv2.imread(img_file)
+        imc =im.copy()
+        letters = self.east.predict_one_image(im, img_file)
+        if (self.debug):
+            self.draw_boxes(letters, (255, 0, 0), imc)
+            
         gt_group_strings = []
         if (gt_file is not None):
             gt_letters = get_gt_symbols(gt_file, im.shape[1], im.shape[0])
+            if (self.debug):
+                self.draw_boxes(gt_letters, (255, 0, 0), imc)
             gt_groups = group_by_y(gt_letters)
             for g in gt_groups:
                 gt_group_strings.append(''.join([s[0] for s in g]))
 
         if (letters is not None):
             groups = group_by_y(sorted(letters, key=lambda x: x[1]))
-            g, p = self.crnn.predict_one_image(im, groups, args.word_length)
+            g, p, grps = self.crnn.predict_one_image(im, groups, args.word_length)
+            if (self.debug):
+                self.draw_boxes(grps, (0,0,255), imc)
+                cv2.imwrite(os.path.join(self.output, os.path.basename(img_file) + "_with_box2.jpg"), imc)
         else:
             p = None
         return gt_group_strings, p, gt_letters
@@ -83,7 +94,8 @@ if __name__ == "__main__":
         raise ValueError('Invalid log level: %s' % args.log)
     logging.basicConfig(level=numeric_level)
 
-    detector = Detector(args.east_weight, args.crnn_weight, args.output)
+    is_debug = logging.root.level == logging.DEBUG
+    detector = Detector(args.east_weight, args.crnn_weight, args.output, is_debug)
     logging.debug("Detector created")
     
     if (args.image != ''):
@@ -91,8 +103,6 @@ if __name__ == "__main__":
         if (not os.path.exists(gt_file)):
             gt_file = None
         g, p, letters = detector.detect_one_file(args.image, gt_file)
-        if (logging.root.level == logging.DEBUG):
-            detector.draw_boxes(letters, os.path.join(args.output, pathlib.Path(args.image).stem + "_with_box.jpg"))
         gstring = '-'.join(g)
         pstring = '-'.join(p)
         if (is_contained(g, p)):
@@ -112,8 +122,6 @@ if __name__ == "__main__":
                 if (not os.path.exists(gt_file)):
                     gt_file = None
                 g, p, letters = detector.detect_one_file(fname, gt_file)
-                if (logging.root.level == logging.DEBUG):
-                    detector.draw_boxes(letters, os.path.join(args.output, pathlib.Path(args.image).stem + "_with_box.jpg"))
 
                 gstring = '-'.join(g)
                 if (p is not None):                    

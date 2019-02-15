@@ -20,6 +20,7 @@ class CRNNPredictor(object):
     def __init__(self, model_file, debug=False):
         self.setup_crnn(model_file)
         self.debug = debug
+        logging.debug("CRNNPredictor: debug mode = {}".format(self.debug))
 
     def set_debug(self, debug):
         self.debug = debug
@@ -32,8 +33,9 @@ class CRNNPredictor(object):
             return None, None, None
         img = cv2.imread(fname)
         groups = get_groups(gtf, img.shape[1], img.shape[0], is_digit=True, debug=False)
-        gt_list, pred_list = self.predict_one_image(img, groups, word_length)
-        if (self.debug and ''.join(gt_list) != ''.join(pred_list)):
+        gt_list, pred_list, grps = self.predict_one_image(img, groups, word_length)
+        if (self.debug):
+            logging.debug("Write group to {}".format(imgf.name + "_debug.jpg"))
             cv2.imwrite(imgf.name + "_debug.jpg", img)
         return gt_list, pred_list
 
@@ -41,14 +43,18 @@ class CRNNPredictor(object):
         gt_list = []
         pred_list = []
         for g in groups:
-            gt, pred = self.predict_one_group(image, g, word_length)
+            gt, pred, grps = self.predict_one_group(image, g, word_length)
             gt_list.append(gt)
             pred_list.append(pred)
-        return gt_list, pred_list
+        if (self.debug):
+            logging.debug("Write group to img_debug.jpg")
+            cv2.imwrite("img_debug.jpg", image)
+        return gt_list, pred_list, grps
 
     def predict_one_group(self, image, group, word_len=4):
         pred = ''
         gt = ''
+        groups = []
         for idx in range(0, len(group), word_len):
             last_idx = min(len(group), idx + word_len)
             tx = group[idx][1]
@@ -57,11 +63,17 @@ class CRNNPredictor(object):
             by = max([g[4] for g in group[idx : last_idx]])
             r, p = self.predict_one_seg(Image.fromarray(image[ty:by+1, tx:bx+1]))
             seg_gt = ''.join([s[0] for s in group[idx : last_idx]])
-            cv2.rectangle(image, (tx, ty), (bx, by), (0,255,0), 1)
-            logging.debug("Seg{}: {} => {}".format(idx, seg_gt, p))
+            if (self.debug):
+                logging.debug("draw rectangle {}, {}, {}, {}".format(tx, ty, bx, by))
+                #img = image.copy()
+                #cv2.rectangle(img, (tx, ty), (bx, by), (0,255,0), 3)
+                #cv2.rectangle(img, (5,5), (100,100), (0,255,0), 3)
+                #cv2.imwrite("img_%s.jpg" % idx, img)
+            logging.debug("Seg{}-{}: {} => {}".format(idx, last_idx, seg_gt, p))
+            groups.append((p, tx, ty, bx, by))
             gt += seg_gt
             pred += p
-        return gt, pred
+        return gt, pred, groups
 
     def predict_one_seg(self, image):
         #image = Image.open(imagefile).convert('L')
@@ -124,7 +136,7 @@ if __name__ == '__main__':
         if (not os.path.exists(args.image)):
             logging.error("Cannot find image file %s" % fname)
             sys.exit(0)
-        g, p = predictor.predict_one_file(args.image, args.word_length)
+        g, p = predictor.predict_one_file(args.image, args.word_length, args.debug)
         if (g is None):
             sys.exit(0)
         gstring = '-'.join(g)
