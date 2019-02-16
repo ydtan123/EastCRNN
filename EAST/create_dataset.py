@@ -11,7 +11,7 @@ import cv2
 
 
 def writeGT(words, filename, img=None):
-    with open(filename, 'w') as fgt:
+    with open(filename, 'w+') as fgt:
         for w in words:
             fgt.write("{0},{1},{2},{3},{4},{5},{6},{7},{8}\n".format(w[1], w[2], w[3], w[2], w[3], w[4], w[1], w[4], w[0]))
             if (img is not None):

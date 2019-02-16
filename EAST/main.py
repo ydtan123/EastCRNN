@@ -8,12 +8,13 @@ from torch.optim import lr_scheduler
 from torch.nn.utils.rnn import pack_padded_sequence
 from torch.utils.data import DataLoader
 from torchvision import transforms
+import logging
 from model import East
 from loss import *
 from data_utils import custom_dset, collate_fn
 import time
 from tensorboardX import SummaryWriter
-import config as cfg
+#import config as cfg
 from utils.init import *
 from utils.util import *
 from utils.save import *
@@ -28,7 +29,7 @@ import numpy as np
 
 
 
-def train(train_loader, model, criterion, scheduler, optimizer, epoch):
+def train(train_loader, model, criterion, scheduler, optimizer, epoch, gpu, result_root, print_freq):
     start = time.time()
     losses = AverageMeter()
     batch_time = AverageMeter()
@@ -39,7 +40,7 @@ def train(train_loader, model, criterion, scheduler, optimizer, epoch):
     for i, (img, score_map, geo_map, training_mask) in enumerate(train_loader):
         data_time.update(time.time() - end)
 
-        if cfg.gpu is not None:
+        if gpu is not None:
             img, score_map, geo_map, training_mask = img.cuda(), score_map.cuda(), geo_map.cuda(), training_mask.cuda()
 
         f_score, f_geometry = model(img)
@@ -56,21 +57,37 @@ def train(train_loader, model, criterion, scheduler, optimizer, epoch):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if i % cfg.print_freq == 0:
+        if i % print_freq == 0:
             print('EAST <==> TRAIN <==> Epoch: [{0}][{1}/{2}] Loss {loss.val:.4f} Avg Loss {loss.avg:.4f})\n'.format(epoch, i, len(train_loader), loss=losses))
 
-        save_loss_info(losses, epoch, i, train_loader)
+        save_loss_info(losses, epoch, i, train_loader, os.path.join(result_root, "log_loss.txt"))
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-a", "--data-root", type=str, default="", help='dataset root')
     parser.add_argument("-c", "--config", type=str, default="", help='specify the config file')
-    args = vars(parser.parse_args())
+    parser.add_argument("-L", "--log", type=str, help='set logging level', default="WARNING")
+    args = parser.parse_args()
 
-    cfg = __import__(args["config"]) if (args["config"] != "") else __import__("config")
-    dataroot = cfg.dataroot if (args["data_root"] == "") else args["data_root"]
-    
+    numeric_level = getattr(logging, args.log.upper(), None)
+    if not isinstance(numeric_level, int):
+        raise ValueError('Invalid log level: %s' % args.log)
+    logging.basicConfig(level=numeric_level)
+
+    is_debug = logging.root.level == logging.DEBUG
+
+    cfg = __import__(args.config) if (args.config != "") else __import__("config")
+    dataroot = cfg.dataroot if (args.data_root == "") else args.data_root
+
+    if (not os.path.exists(dataroot)):
+        logging.error("Cannot find data set: {}".format(dataroot))
+        sys.exit(0)
+        
+    result_root = os.path.abspath(cfg.result)
+    if not os.path.exists(result_root):
+        os.mkdir(result_root)
+
     hmean = .0
     is_best = False
 
@@ -88,13 +105,6 @@ def main():
     print('EAST <==> Prepare <==> DataLoader <==> Done') 
     
 
-    # test datalodaer
-    """
-    for i in range(100000):
-        for j, (a,b,c,d) in enumerate(train_loader):
-            print(i, j,'/',len(train_loader))
-    """
-
     # Model
     print('EAST <==> Prepare <==> Network <==> Begin')
     model = East()
@@ -108,7 +118,7 @@ def main():
     scheduler = lr_scheduler.StepLR(optimizer, step_size=10000, gamma=0.94)
     
     # init or resume
-    if cfg.resume and  os.path.isfile(cfg.checkpoint):
+    if cfg.resume and os.path.isfile(cfg.checkpoint):
         weightpath = os.path.abspath(cfg.checkpoint)
         print("EAST <==> Prepare <==> Loading checkpoint '{}' <==> Begin".format(weightpath))
         checkpoint = torch.load(weightpath)
@@ -122,7 +132,7 @@ def main():
 
     for epoch in range(start_epoch, cfg.max_epochs):
 
-        train(train_loader, model, criterion, scheduler, optimizer, epoch)
+        train(train_loader, model, criterion, scheduler, optimizer, epoch, cfg.gpu, result_root, cfg.print_freq)
 
         if epoch % cfg.eval_iteration == 0:
 
@@ -130,10 +140,10 @@ def main():
             output_txt_dir_path = predict(cfg, model, criterion, epoch)
 
             # Zip file
-            submit_path = MyZip(output_txt_dir_path, epoch)
+            MyZip(output_txt_dir_path, epoch)
 
             # submit and compute Hmean
-            hmean_ = compute_hmean(submit_path)
+            hmean_ = compute_hmean(os.path.join(result_root, "submit.zip"))
 
             if hmean_ > hmean:
                 is_best = True

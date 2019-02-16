@@ -20,11 +20,8 @@ def MyZip(out_txt_dir, epoch):
 		sys.exit('ZIP ERROR')
 
 	print('EAST <==> Evaluation <==> Into out_txt_dir:{} <==> Done'.format(out_txt_dir))
-	workspace = os.path.abspath('./result_digit_75k')
 
-	submit_path = os.path.join(workspace, 'submit.zip')
-
-	return submit_path
+	return
 
 
 
