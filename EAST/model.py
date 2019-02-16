@@ -228,15 +228,12 @@ class East(nn.Module):
         self.sigmoid2 = nn.Sigmoid()
         self.conv10 = nn.Conv2d(32, 1, 1)
         self.sigmoid3 = nn.Sigmoid()
-        self.unpool1 = nn.Upsample(scale_factor=2, mode='bilinear')
-        self.unpool2 = nn.Upsample(scale_factor=2, mode='bilinear')
-        self.unpool3 = nn.Upsample(scale_factor=2, mode='bilinear')
     
     def forward(self,images):
         images = mean_image_subtraction(images)
         _, f = self.resnet(images)
         h = f[3]  # bs 2048 w/32 h/32
-        g = (self.unpool1(h)) #bs 2048 w/16 h/16
+        g = nn.functional.interpolate(h, scale_factor=2, mode='bilinear') #bs 2048 w/16 h/16
         c = self.conv1(torch.cat((g, f[2]), 1))
         c = self.bn1(c)
         c = self.relu1(c)
@@ -244,7 +241,7 @@ class East(nn.Module):
         h = self.conv2(c)  # bs 128 w/16 h/16
         h = self.bn2(h)
         h = self.relu2(h)
-        g = self.unpool2(h) # bs 128 w/8 h/8
+        g = nn.functional.interpolate(h, scale_factor=2, mode='bilinear') # bs 128 w/8 h/8
         c = self.conv3(torch.cat((g, f[1]), 1))
         c = self.bn3(c)
         c = self.relu3(c)
@@ -252,7 +249,7 @@ class East(nn.Module):
         h = self.conv4(c)  # bs 64 w/8 h/8
         h = self.bn4(h)
         h = self.relu4(h)
-        g = self.unpool3(h) # bs 64 w/4 h/4
+        g = nn.functional.interpolate(h, scale_factor=2, mode='bilinear') # bs 64 w/4 h/4
         c = self.conv5(torch.cat((g, f[0]), 1))
         c = self.bn5(c)
         c = self.relu5(c)
