@@ -26,18 +26,20 @@ class MNISTSample(object):
     
         xstart = 0
         xratio = 0.5
+        labels = []
         for i in range(data_len):
             displacement = 0 if i==0 else random.randint(1, 5)  # move to left
             distortion = random.random() * xratio + (1 - xratio)  # compress horizontally
             xstart = xstart - displacement
             xlen = int(28 * distortion)
             xend = xstart + xlen
+            labels.append((str(self.label[digits[i]]), xstart + 1, 1, xend - 1, 26))
             #new_img = self.images[digits[i]].copy()
             img[:, xstart : xend] = cv2.resize(self.images[digits[i]], (xlen, 28))
             xstart = xend
         gray = cv2.bitwise_not(noisy("gauss", img))
         im = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
-        return [self.label[i] for i in digits], im
+        return [(0, 0, labels)], im
 
 
 if __name__ == "__main__":

@@ -9,7 +9,9 @@ import numpy as np
 import cv2
 
 sys.path.append("../common")
+sys.path.append("../mnist")
 from image_boxes import get_random_segments
+from create_samples import MNISTSample
 
 
 def get_boudary(symbols):
@@ -31,40 +33,13 @@ def writeGT(words, filename):
 def gen_test_gt_zip(test_root, result_root):
     os.system("zip {} {}".format(os.path.join(result_root, "gt.zip"), os.path.join(test_root, "*.txt")))
 
-## Arguments
-parser = argparse.ArgumentParser()
-parser.add_argument("-i", "--image", type=str, help="the file that has a list of images", default='')
-parser.add_argument("-d", "--debug", action='store_true', help="Debug mode", default=0)
-parser.add_argument("-p", "--prepare", type=str, help="Prepare training and testing sets", default='')
-parser.add_argument("-a", "--data-root", type=str, help='dataset root')
-parser.add_argument("-r", "--result-root", type=str, help='result root')
 
-args = vars(parser.parse_args())
-
-if (args["prepare"] != ''):
-    d = args["prepare"].split(',')
-    train_size, test_size = int(d[0]), int(d[1])
-    trn = 0
-    tst = 0
-
-    train_img_root = os.path.join(args['data_root'], "train/img")
-    train_gt_root = os.path.join(args['data_root'], "train/gt")
-    train_img_with_box = os.path.join(args['data_root'], "train/img_with_box")
-    test_root = os.path.join(args['data_root'], "test")
-    if not os.path.exists(args['data_root']):
-        os.makedirs(test_root)
-        os.makedirs(train_img_with_box)
-        os.makedirs(train_gt_root)
-        os.makedirs(train_img_root)
-    
-    if not os.path.exists(args["result_root"]):
-        os.makedirs(args["result_root"])
-
+def gen_from_images(image_list, train_img_root, train_gt_root, train_img_with_box, test_root, train_size, test_size):
     file_dict = {}
     max_width = 0
 #    for f in pathlib.Path(args["image"]).glob("**/*.jpg"):
     count = 0
-    with open(args["image"]) as ff:
+    with open(image_list) as ff:
         for l in ff:
             fname = l.strip()
             f = pathlib.Path(fname)
@@ -110,6 +85,55 @@ if (args["prepare"] != ''):
             with open(os.path.join(args['data_root'], "filelog.txt"), "w+") as filelog:
                 for f, idx in file_dict.items():
                     filelog.write("{0} {1}\n".format(f, idx))
+
+
+def gen_from_mnist(mnist_root, img_root, gt_root, img_with_box, number_of_samples, is_test=False):
+    mn = MNISTSample(mnist_root)
+    for i in range(number_of_samples):
+        gt, im = mn.gen_random_img(data_len=5)
+        gt_prefix = 'gt_' if is_test else ''
+        writeGT(gt, "{0}/{1}img_{2}.txt".format(gt_root, gt_prefix, i))
+        cv2.imwrite("{0}/img_{1}.jpg".format(img_root, i), im)
+        if (is_test):
+            for _, _, symbols in gt:
+                tx, ty, bx, by = get_boudary(symbols)
+                cv2.rectangle(im, (tx, ty), (bx, by),(0,255,0),1)
+                cv2.imwrite("{0}/img_{1}.jpg".format(img_with_box, i), im)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i", "--image", type=str, help="the file that has a list of images", default='')
+    parser.add_argument("-m", "--mnist", type=str, help="gen random images from mnist data", default='')
+    parser.add_argument("-d", "--debug", action='store_true', help="Debug mode", default=0)
+    parser.add_argument("-p", "--prepare", type=str, help="Prepare training and testing sets", default='10,10')
+    parser.add_argument("-a", "--data-root", type=str, help='dataset root')
+    parser.add_argument("-r", "--result-root", type=str, help='result root')
+    
+    args = vars(parser.parse_args())
+    
+    d = args["prepare"].split(',')
+    train_size, test_size = int(d[0]), int(d[1])
+    print("Generating {} train sampels, {} test samples".format(train_size, test_size))
+    train_img_root = os.path.join(args['data_root'], "train/img")
+    train_gt_root = os.path.join(args['data_root'], "train/gt")
+    train_img_with_box = os.path.join(args['data_root'], "train/img_with_box")
+    test_root = os.path.join(args['data_root'], "test")
+    if not os.path.exists(args['data_root']):
+        os.makedirs(test_root)
+        os.makedirs(train_img_with_box)
+        os.makedirs(train_gt_root)
+        os.makedirs(train_img_root)
+    
+    if not os.path.exists(args["result_root"]):
+        os.makedirs(args["result_root"])
+
+    if (args["image"] != ''):
+        gen_from_images(args["image"], train_img_root, train_gt_root, train_img_with_box, test_root, train_size, test_size)
+    
+    if (args["mnist"] != ''):
+        gen_from_mnist(args["mnist"], train_img_root, train_gt_root, train_img_with_box,  train_size)
+        gen_from_mnist(args["mnist"], test_root, test_root, train_img_with_box,  train_size)
 
     # generate gt.zip of test files and copy to the result directory
     os.system("zip -j {} {}".format(os.path.join(args["result_root"], "gt.zip"), os.path.join(test_root, "*.txt")))
